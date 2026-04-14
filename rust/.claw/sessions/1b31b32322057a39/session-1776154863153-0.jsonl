@@ -1,0 +1,2 @@
+{"created_at_ms":1776154863152,"model":"minimax/MiniMax-Text-01","session_id":"session-1776154863153-0","type":"session_meta","updated_at_ms":1776154863152,"version":1,"workspace_root":"/home/qixin/.openclaw/workspace-bot1-agent/claw-code/rust"}
+{"message":{"blocks":[{"text":"1+1等于几？用一句话回答 --max-tokens 100","type":"text"}],"role":"user"},"type":"message"}

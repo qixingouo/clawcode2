@@ -1,0 +1,3 @@
+{"created_at_ms":1776155051240,"model":"minimax/MiniMax-Text-01","session_id":"session-1776155051241-0","type":"session_meta","updated_at_ms":1776155052623,"version":1,"workspace_root":"/home/qixin/.openclaw/workspace-bot1-agent/claw-code/rust"}
+{"message":{"blocks":[{"text":"1+1等于几？用一句话回答","type":"text"}],"role":"user"},"type":"message"}
+{"message":{"blocks":[{"text":"1+1等于2。","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":0}},"type":"message"}

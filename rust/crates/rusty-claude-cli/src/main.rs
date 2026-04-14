@@ -57,13 +57,6 @@ use tools::{
 };
 
 const DEFAULT_MODEL: &str = "claude-opus-4-6";
-fn max_tokens_for_model(model: &str) -> u32 {
-    if model.contains("opus") {
-        32_000
-    } else {
-        64_000
-    }
-}
 // Build-time constants injected by build.rs (fall back to static values when
 // build.rs hasn't run, e.g. in doc-test or unusual toolchain environments).
 const DEFAULT_DATE: &str = match option_env!("BUILD_DATE") {
@@ -6790,7 +6783,7 @@ impl ApiClient for AnthropicRuntimeClient {
         let is_post_tool = request_ends_with_tool_result(&request);
         let message_request = MessageRequest {
             model: self.model.clone(),
-            max_tokens: max_tokens_for_model(&self.model),
+            max_tokens: api::max_tokens_for_model(&self.model),
             messages: convert_messages(&request.messages),
             system: (!request.system_prompt.is_empty()).then(|| request.system_prompt.join("\n\n")),
             tools: self

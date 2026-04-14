@@ -297,6 +297,10 @@ pub fn model_token_limit(model: &str) -> Option<ModelTokenLimit> {
             max_output_tokens: 64_000,
             context_window_tokens: 131_072,
         }),
+        "MiniMax-Text-01" | "minimax/MiniMax-Text-01" => Some(ModelTokenLimit {
+            max_output_tokens: 32_000,
+            context_window_tokens: 1_000_000,
+        }),
         _ => None,
     }
 }
