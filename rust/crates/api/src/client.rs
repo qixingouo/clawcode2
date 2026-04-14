@@ -45,9 +45,7 @@ impl ProviderClient {
                     Some(meta) if meta.auth_env == "DEEPSEEK_API_KEY" => {
                         OpenAiCompatConfig::deepseek()
                     }
-                    Some(meta) if meta.auth_env == "XAI_API_KEY" => {
-                        OpenAiCompatConfig::xai()
-                    }
+                    Some(meta) if meta.auth_env == "XAI_API_KEY" => OpenAiCompatConfig::xai(),
                     _ => OpenAiCompatConfig::openai(),
                 };
                 Ok(Self::OpenAi(OpenAiCompatClient::from_env(config)?))
