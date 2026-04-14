@@ -46,6 +46,13 @@ impl ProviderClient {
                         OpenAiCompatConfig::deepseek()
                     }
                     Some(meta) if meta.auth_env == "XAI_API_KEY" => OpenAiCompatConfig::xai(),
+                    Some(meta) if meta.auth_env == "DOUBAO_API_KEY" => OpenAiCompatConfig::doubao(),
+                    Some(meta) if meta.auth_env == "ZHIPU_API_KEY" => OpenAiCompatConfig::zhipu(),
+                    Some(meta) if meta.auth_env == "ERNIE_API_KEY" => OpenAiCompatConfig::ernie(),
+                    Some(meta) if meta.auth_env == "SPARK_API_KEY" => OpenAiCompatConfig::spark(),
+                    Some(meta) if meta.auth_env == "MOONSHOT_API_KEY" => {
+                        OpenAiCompatConfig::moonshot()
+                    }
                     _ => OpenAiCompatConfig::openai(),
                 };
                 Ok(Self::OpenAi(OpenAiCompatClient::from_env(config)?))

@@ -214,6 +214,51 @@ pub fn metadata_for_model(model: &str) -> Option<ProviderMetadata> {
             default_base_url: openai_compat::DEFAULT_DEEPSEEK_BASE_URL,
         });
     }
+    // ByteDance Doubao (Volcengine) API endpoint.
+    if canonical.starts_with("doubao/") || canonical.starts_with("doubao-") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::OpenAi,
+            auth_env: "DOUBAO_API_KEY",
+            base_url_env: "DOUBAO_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_DOUBAO_BASE_URL,
+        });
+    }
+    // Zhipu AI (智谱 AI) API endpoint.
+    if canonical.starts_with("zhipu/") || canonical.starts_with("zhipu-") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::OpenAi,
+            auth_env: "ZHIPU_API_KEY",
+            base_url_env: "ZHIPU_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_ZHIPU_BASE_URL,
+        });
+    }
+    // Baidu Qianfan / ERNIE (文心一言) API endpoint.
+    if canonical.starts_with("ernie/") || canonical.starts_with("ernie-") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::OpenAi,
+            auth_env: "ERNIE_API_KEY",
+            base_url_env: "ERNIE_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_ERNIE_BASE_URL,
+        });
+    }
+    // iFlytek Spark (讯飞星火) API endpoint.
+    if canonical.starts_with("spark/") || canonical.starts_with("spark-") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::OpenAi,
+            auth_env: "SPARK_API_KEY",
+            base_url_env: "SPARK_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_SPARK_BASE_URL,
+        });
+    }
+    // Moonshot (月之暗面) API endpoint.
+    if canonical.starts_with("moonshot/") || canonical.starts_with("moonshot-") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::OpenAi,
+            auth_env: "MOONSHOT_API_KEY",
+            base_url_env: "MOONSHOT_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_MOONSHOT_BASE_URL,
+        });
+    }
     None
 }
 
@@ -244,6 +289,21 @@ pub fn detect_provider_kind(model: &str) -> ProviderKind {
         return ProviderKind::OpenAi;
     }
     if openai_compat::has_api_key("DEEPSEEK_API_KEY") {
+        return ProviderKind::OpenAi;
+    }
+    if openai_compat::has_api_key("DOUBAO_API_KEY") {
+        return ProviderKind::OpenAi;
+    }
+    if openai_compat::has_api_key("ZHIPU_API_KEY") {
+        return ProviderKind::OpenAi;
+    }
+    if openai_compat::has_api_key("ERNIE_API_KEY") {
+        return ProviderKind::OpenAi;
+    }
+    if openai_compat::has_api_key("SPARK_API_KEY") {
+        return ProviderKind::OpenAi;
+    }
+    if openai_compat::has_api_key("MOONSHOT_API_KEY") {
         return ProviderKind::OpenAi;
     }
     // Last resort: if OPENAI_BASE_URL is set without OPENAI_API_KEY (some
@@ -300,6 +360,59 @@ pub fn model_token_limit(model: &str) -> Option<ModelTokenLimit> {
         "MiniMax-Text-01" | "minimax/MiniMax-Text-01" => Some(ModelTokenLimit {
             max_output_tokens: 32_000,
             context_window_tokens: 1_000_000,
+        }),
+        // Doubao (ByteDance) models
+        "doubao/doubao-pro" | "doubao-pro" => Some(ModelTokenLimit {
+            max_output_tokens: 32_000,
+            context_window_tokens: 256_000,
+        }),
+        "doubao/doubao-lite" | "doubao-lite" => Some(ModelTokenLimit {
+            max_output_tokens: 8_000,
+            context_window_tokens: 256_000,
+        }),
+        // Zhipu AI (智谱) models
+        "zhipu/glm-4" | "glm-4" => Some(ModelTokenLimit {
+            max_output_tokens: 32_000,
+            context_window_tokens: 1_280_000,
+        }),
+        "zhipu/glm-4-flash" | "glm-4-flash" => Some(ModelTokenLimit {
+            max_output_tokens: 8_000,
+            context_window_tokens: 1_280_000,
+        }),
+        "zhipu/glm-3-turbo" | "glm-3-turbo" => Some(ModelTokenLimit {
+            max_output_tokens: 8_000,
+            context_window_tokens: 128_000,
+        }),
+        // Baidu ERNIE models
+        "ernie/ernie-4.0" | "ernie-4.0" => Some(ModelTokenLimit {
+            max_output_tokens: 8_000,
+            context_window_tokens: 512_000,
+        }),
+        "ernie/ernie-3.5" | "ernie-3.5" => Some(ModelTokenLimit {
+            max_output_tokens: 8_000,
+            context_window_tokens: 256_000,
+        }),
+        // iFlytek Spark models
+        "spark/spark-3.5" | "spark-3.5" => Some(ModelTokenLimit {
+            max_output_tokens: 8_000,
+            context_window_tokens: 128_000,
+        }),
+        "spark/spark-3.0" | "spark-3.0" => Some(ModelTokenLimit {
+            max_output_tokens: 8_000,
+            context_window_tokens: 64_000,
+        }),
+        // Moonshot models
+        "moonshot/moonshot-v1-8k" | "moonshot-v1-8k" => Some(ModelTokenLimit {
+            max_output_tokens: 8_000,
+            context_window_tokens: 8_000,
+        }),
+        "moonshot/moonshot-v1-32k" | "moonshot-v1-32k" => Some(ModelTokenLimit {
+            max_output_tokens: 32_000,
+            context_window_tokens: 32_000,
+        }),
+        "moonshot/moonshot-v1-128k" | "moonshot-v1-128k" => Some(ModelTokenLimit {
+            max_output_tokens: 32_000,
+            context_window_tokens: 128_000,
         }),
         _ => None,
     }
@@ -368,6 +481,31 @@ const FOREIGN_PROVIDER_ENV_VARS: &[(&str, &str, &str)] = &[
         "DEEPSEEK_API_KEY",
         "DeepSeek",
         "prefix your model name with `deepseek/` (e.g. `--model deepseek/deepseek-chat`) so prefix routing selects the DeepSeek backend",
+    ),
+    (
+        "DOUBAO_API_KEY",
+        "ByteDance Doubao",
+        "prefix your model name with `doubao/` (e.g. `--model doubao/doubao-pro`) so prefix routing selects the Doubao backend",
+    ),
+    (
+        "ZHIPU_API_KEY",
+        "Zhipu AI",
+        "prefix your model name with `zhipu/` (e.g. `--model zhipu/glm-4`) so prefix routing selects the Zhipu backend",
+    ),
+    (
+        "ERNIE_API_KEY",
+        "Baidu ERNIE",
+        "prefix your model name with `ernie/` (e.g. `--model ernie/ernie-4.0`) so prefix routing selects the ERNIE backend",
+    ),
+    (
+        "SPARK_API_KEY",
+        "iFlytek Spark",
+        "prefix your model name with `spark/` (e.g. `--model spark/spark-3.5`) so prefix routing selects the Spark backend",
+    ),
+    (
+        "MOONSHOT_API_KEY",
+        "Moonshot",
+        "prefix your model name with `moonshot/` (e.g. `--model moonshot/moonshot-v1-8k`) so prefix routing selects the Moonshot backend",
     ),
 ];
 

@@ -21,6 +21,11 @@ pub const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 pub const DEFAULT_DASHSCOPE_BASE_URL: &str = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 pub const DEFAULT_MINIMAX_BASE_URL: &str = "https://api.minimax.chat/v1";
 pub const DEFAULT_DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/v1";
+pub const DEFAULT_DOUBAO_BASE_URL: &str = "https://ark.cn-beijing.volces.com/api/v3";
+pub const DEFAULT_ZHIPU_BASE_URL: &str = "https://open.bigmodel.cn/api/paas/v4";
+pub const DEFAULT_ERNIE_BASE_URL: &str = "https://qianfan.baidubce.com/v2";
+pub const DEFAULT_SPARK_BASE_URL: &str = "https://spark-api.xf-yun.com/v3.1/chat";
+pub const DEFAULT_MOONSHOT_BASE_URL: &str = "https://open.moonshot.cn/v1";
 const REQUEST_ID_HEADER: &str = "request-id";
 const ALT_REQUEST_ID_HEADER: &str = "x-request-id";
 const DEFAULT_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
@@ -40,6 +45,11 @@ const OPENAI_ENV_VARS: &[&str] = &["OPENAI_API_KEY"];
 const DASHSCOPE_ENV_VARS: &[&str] = &["DASHSCOPE_API_KEY"];
 const MINIMAX_ENV_VARS: &[&str] = &["MINIMAX_API_KEY"];
 const DEEPSEEK_ENV_VARS: &[&str] = &["DEEPSEEK_API_KEY"];
+const DOUBAO_ENV_VARS: &[&str] = &["DOUBAO_API_KEY"];
+const ZHIPU_ENV_VARS: &[&str] = &["ZHIPU_API_KEY"];
+const ERNIE_ENV_VARS: &[&str] = &["ERNIE_API_KEY"];
+const SPARK_ENV_VARS: &[&str] = &["SPARK_API_KEY"];
+const MOONSHOT_ENV_VARS: &[&str] = &["MOONSHOT_API_KEY"];
 
 impl OpenAiCompatConfig {
     #[must_use]
@@ -100,6 +110,66 @@ impl OpenAiCompatConfig {
         }
     }
 
+    /// ByteDance Doubao (Volcengine) API endpoint.
+    /// Uses the OpenAI-compatible REST shape at ark.cn-beijing.volces.com.
+    #[must_use]
+    pub const fn doubao() -> Self {
+        Self {
+            provider_name: "Doubao",
+            api_key_env: "DOUBAO_API_KEY",
+            base_url_env: "DOUBAO_BASE_URL",
+            default_base_url: DEFAULT_DOUBAO_BASE_URL,
+        }
+    }
+
+    /// Zhipu AI (智谱 AI) API endpoint.
+    /// Uses the OpenAI-compatible REST shape at open.bigmodel.cn.
+    #[must_use]
+    pub const fn zhipu() -> Self {
+        Self {
+            provider_name: "Zhipu",
+            api_key_env: "ZHIPU_API_KEY",
+            base_url_env: "ZHIPU_BASE_URL",
+            default_base_url: DEFAULT_ZHIPU_BASE_URL,
+        }
+    }
+
+    /// Baidu Qianfan (ERNIE/文心一言) API endpoint.
+    /// Uses the OpenAI-compatible REST shape at qianfan.baidubce.com.
+    #[must_use]
+    pub const fn ernie() -> Self {
+        Self {
+            provider_name: "ERNIE",
+            api_key_env: "ERNIE_API_KEY",
+            base_url_env: "ERNIE_BASE_URL",
+            default_base_url: DEFAULT_ERNIE_BASE_URL,
+        }
+    }
+
+    /// iFlytek Spark (讯飞星火) API endpoint.
+    /// Uses the OpenAI-compatible REST shape at spark-api.xf-yun.com.
+    #[must_use]
+    pub const fn spark() -> Self {
+        Self {
+            provider_name: "Spark",
+            api_key_env: "SPARK_API_KEY",
+            base_url_env: "SPARK_BASE_URL",
+            default_base_url: DEFAULT_SPARK_BASE_URL,
+        }
+    }
+
+    /// Moonshot (月之暗面) API endpoint.
+    /// Uses the OpenAI-compatible REST shape at open.moonshot.cn.
+    #[must_use]
+    pub const fn moonshot() -> Self {
+        Self {
+            provider_name: "Moonshot",
+            api_key_env: "MOONSHOT_API_KEY",
+            base_url_env: "MOONSHOT_BASE_URL",
+            default_base_url: DEFAULT_MOONSHOT_BASE_URL,
+        }
+    }
+
     #[must_use]
     pub fn credential_env_vars(self) -> &'static [&'static str] {
         match self.provider_name {
@@ -108,6 +178,11 @@ impl OpenAiCompatConfig {
             "DashScope" => DASHSCOPE_ENV_VARS,
             "MiniMax" => MINIMAX_ENV_VARS,
             "DeepSeek" => DEEPSEEK_ENV_VARS,
+            "Doubao" => DOUBAO_ENV_VARS,
+            "Zhipu" => ZHIPU_ENV_VARS,
+            "ERNIE" => ERNIE_ENV_VARS,
+            "Spark" => SPARK_ENV_VARS,
+            "Moonshot" => MOONSHOT_ENV_VARS,
             _ => &[],
         }
     }
@@ -808,7 +883,17 @@ fn strip_routing_prefix(model: &str) -> &str {
         // not if "/" appears in the middle of the model name for other reasons.
         if matches!(
             prefix,
-            "openai" | "xai" | "grok" | "qwen" | "minimax" | "deepseek"
+            "openai"
+                | "xai"
+                | "grok"
+                | "qwen"
+                | "minimax"
+                | "deepseek"
+                | "doubao"
+                | "zhipu"
+                | "ernie"
+                | "spark"
+                | "moonshot"
         ) {
             &model[pos + 1..]
         } else {
