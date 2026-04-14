@@ -421,7 +421,7 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
     SlashCommandSpec {
         name: "desktop",
         aliases: &[],
-        summary: "Open or manage the desktop app integration",
+        summary: "Open the browser-based desktop UI at port 18989",
         argument_hint: None,
         resume_supported: false,
     },

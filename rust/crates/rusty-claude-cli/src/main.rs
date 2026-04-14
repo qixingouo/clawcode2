@@ -3972,7 +3972,6 @@ impl LiveCli {
             | SlashCommand::Fast
             | SlashCommand::Exit
             | SlashCommand::Summary
-            | SlashCommand::Desktop
             | SlashCommand::Brief
             | SlashCommand::Advisor
             | SlashCommand::Stickers
@@ -4004,6 +4003,18 @@ impl LiveCli {
                 eprintln!("{cmd_name} is not yet implemented in this build.");
                 false
             }
+            SlashCommand::Desktop => match desktop::start_web_ui() {
+                Ok(url) => {
+                    desktop::open_browser(&url);
+                    println!("Desktop UI started at {}", url);
+                    println!("Opening browser automatically...");
+                    true
+                }
+                Err(e) => {
+                    eprintln!("Failed to start desktop UI: {}", e);
+                    false
+                }
+            },
             SlashCommand::Unknown(name) => {
                 eprintln!("{}", format_unknown_slash_command(&name));
                 false
