@@ -194,6 +194,26 @@ pub fn metadata_for_model(model: &str) -> Option<ProviderMetadata> {
             default_base_url: openai_compat::DEFAULT_DASHSCOPE_BASE_URL,
         });
     }
+    // MiniMax API endpoint. Routes minimax/* model names to the OpenAI-compat
+    // client pointed at MiniMax's API.
+    if canonical.starts_with("minimax/") || canonical.starts_with("minimax-") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::OpenAi,
+            auth_env: "MINIMAX_API_KEY",
+            base_url_env: "MINIMAX_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_MINIMAX_BASE_URL,
+        });
+    }
+    // DeepSeek API endpoint. Routes deepseek/* model names to the OpenAI-compat
+    // client pointed at DeepSeek's API.
+    if canonical.starts_with("deepseek/") || canonical.starts_with("deepseek-") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::OpenAi,
+            auth_env: "DEEPSEEK_API_KEY",
+            base_url_env: "DEEPSEEK_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_DEEPSEEK_BASE_URL,
+        });
+    }
     None
 }
 
@@ -219,6 +239,12 @@ pub fn detect_provider_kind(model: &str) -> ProviderKind {
     }
     if openai_compat::has_api_key("XAI_API_KEY") {
         return ProviderKind::Xai;
+    }
+    if openai_compat::has_api_key("MINIMAX_API_KEY") {
+        return ProviderKind::OpenAi;
+    }
+    if openai_compat::has_api_key("DEEPSEEK_API_KEY") {
+        return ProviderKind::OpenAi;
     }
     // Last resort: if OPENAI_BASE_URL is set without OPENAI_API_KEY (some
     // local providers like Ollama don't require auth), still route there.
@@ -264,6 +290,10 @@ pub fn model_token_limit(model: &str) -> Option<ModelTokenLimit> {
             context_window_tokens: 200_000,
         }),
         "grok-3" | "grok-3-mini" => Some(ModelTokenLimit {
+            max_output_tokens: 64_000,
+            context_window_tokens: 131_072,
+        }),
+        "deepseek-chat" | "deepseek-coder" => Some(ModelTokenLimit {
             max_output_tokens: 64_000,
             context_window_tokens: 131_072,
         }),
@@ -324,6 +354,16 @@ const FOREIGN_PROVIDER_ENV_VARS: &[(&str, &str, &str)] = &[
         "DASHSCOPE_API_KEY",
         "Alibaba DashScope",
         "prefix your model name with `qwen/` or `qwen-` (e.g. `--model qwen-plus`) so prefix routing selects the DashScope backend",
+    ),
+    (
+        "MINIMAX_API_KEY",
+        "MiniMax",
+        "prefix your model name with `minimax/` (e.g. `--model minimax/abab6.5s`) so prefix routing selects the MiniMax backend",
+    ),
+    (
+        "DEEPSEEK_API_KEY",
+        "DeepSeek",
+        "prefix your model name with `deepseek/` (e.g. `--model deepseek/deepseek-chat`) so prefix routing selects the DeepSeek backend",
     ),
 ];
 
