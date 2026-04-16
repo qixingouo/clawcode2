@@ -106,7 +106,9 @@ impl GoalTracker {
     }
 
     pub fn is_complete(&self) -> bool {
-        self.sub_tasks.iter().all(|t| t.status == SubTaskStatus::Completed)
+        self.sub_tasks
+            .iter()
+            .all(|t| t.status == SubTaskStatus::Completed)
     }
 
     pub fn progress(&self) -> f64 {
@@ -211,13 +213,17 @@ impl AutonomousMode {
         let mut tasks = Vec::new();
         let task_lower = task.to_lowercase();
 
-        if task_lower.contains("implement") || task_lower.contains("create") || task_lower.contains("add") {
+        if task_lower.contains("implement")
+            || task_lower.contains("create")
+            || task_lower.contains("add")
+        {
             tasks.push("Analyze requirements and design approach".to_string());
             tasks.push("Create or modify source files".to_string());
             tasks.push("Update tests if needed".to_string());
         }
 
-        if task_lower.contains("fix") || task_lower.contains("bug") || task_lower.contains("error") {
+        if task_lower.contains("fix") || task_lower.contains("bug") || task_lower.contains("error")
+        {
             tasks.push("Identify the root cause of the issue".to_string());
             tasks.push("Implement the fix".to_string());
             tasks.push("Verify the fix works".to_string());
@@ -290,19 +296,27 @@ impl AutonomousMode {
             return "Review the compilation error and fix syntax or type issues.".to_string();
         }
 
-        if error_lower.contains("test") || error_lower.contains("assertion") || error_lower.contains("failed") {
-            return "Debug the failing test case. Check expected vs actual values and test setup.".to_string();
+        if error_lower.contains("test")
+            || error_lower.contains("assertion")
+            || error_lower.contains("failed")
+        {
+            return "Debug the failing test case. Check expected vs actual values and test setup."
+                .to_string();
         }
 
         if error_lower.contains("permission") || error_lower.contains("denied") {
-            return "Check file permissions and access rights. Ensure proper authorization.".to_string();
+            return "Check file permissions and access rights. Ensure proper authorization."
+                .to_string();
         }
 
         if error_lower.contains("not exist") || error_lower.contains("does not exist") {
             return "Verify the file or resource exists. Check paths and file names.".to_string();
         }
 
-        format!("Error detected: {}. Analyze the issue and try an alternative approach.", error)
+        format!(
+            "Error detected: {}. Analyze the issue and try an alternative approach.",
+            error
+        )
     }
 
     pub fn self_evaluate(&self, context: &str) -> EvaluationResult {
@@ -325,7 +339,11 @@ impl AutonomousMode {
         let result = EvaluationResult::failure(
             score,
             feedback,
-            if passed { Vec::new() } else { vec!["Score below threshold".to_string()] },
+            if passed {
+                Vec::new()
+            } else {
+                vec!["Score below threshold".to_string()]
+            },
         );
 
         result
@@ -418,37 +436,15 @@ impl AutonomousMode {
         })
     }
 
-    fn execute_sub_task<F>(
-        &mut self,
-        task: String,
-        execute_step: &mut F,
-    ) -> Result<StepResult, StepError>
-    where
-        F: FnMut(String) -> Result<StepResult, StepError>,
-    {
-        let step_prompt = task.clone();
-
-        let result = execute_step(step_prompt)?;
-
-        self.record_step();
-
-        if self.should_confirm() {
-            let eval = self.self_evaluate(&task);
-            if !eval.passed {
-                if let Some(correction) = self.self_correct(&eval.feedback) {
-                    let _ = execute_step(correction);
-                    self.record_step();
-                }
-            }
-        }
-
-        Ok(result)
-    }
-
     fn handle_task_failure(&mut self, task: &str, error: Option<&str>) {
         if let Some(ref mut tracker) = self.goal_tracker {
-            if let Some(sub_task) = tracker.sub_tasks.iter_mut().find(|t| &t.description == task) {
-                sub_task.status = SubTaskStatus::Failed(error.unwrap_or("Unknown error").to_string());
+            if let Some(sub_task) = tracker
+                .sub_tasks
+                .iter_mut()
+                .find(|t| &t.description == task)
+            {
+                sub_task.status =
+                    SubTaskStatus::Failed(error.unwrap_or("Unknown error").to_string());
             }
         }
 
@@ -573,7 +569,7 @@ mod tests {
 
     #[test]
     fn test_autonomous_mode_default_config() {
-        let mode = AutonomousMode::new(AgentConfig::default());
+        let mut mode = AutonomousMode::new(AgentConfig::default());
         assert_eq!(mode.step_count(), 0);
         assert_eq!(mode.correction_count(), 0);
         assert_eq!(mode.progress(), 0.0);
@@ -654,7 +650,7 @@ mod tests {
         let mut config = AgentConfig::default();
         config.auto.self_correct.enabled = false;
 
-        let mode = AutonomousMode::new(config);
+        let mut mode = AutonomousMode::new(config);
         let correction = mode.self_correct("some error");
         assert!(correction.is_none());
     }
@@ -665,11 +661,8 @@ mod tests {
         assert!(success.passed);
         assert_eq!(success.score, 1.0);
 
-        let failure = EvaluationResult::failure(
-            0.5,
-            "Needs work".to_string(),
-            vec!["Issue 1".to_string()],
-        );
+        let failure =
+            EvaluationResult::failure(0.5, "Needs work".to_string(), vec!["Issue 1".to_string()]);
         assert!(!failure.passed);
         assert_eq!(failure.score, 0.5);
     }

@@ -51,7 +51,7 @@ mod usage;
 pub mod worker_boot;
 
 pub use autonomous::{
-    AgentConfig, AutonomousMode, AutonomousResult, AutonomousStatus, AutoConfig, EvaluationResult,
+    AgentConfig, AutoConfig, AutonomousMode, AutonomousResult, AutonomousStatus, EvaluationResult,
     GoalTracker, SelfCorrectConfig, StepError, StepResult, SubTask, SubTaskStatus, TaskStep,
 };
 pub use bash::{execute_bash, BashCommandInput, BashCommandOutput};

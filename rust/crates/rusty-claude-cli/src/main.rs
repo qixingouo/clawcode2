@@ -44,11 +44,11 @@ use render::{MarkdownStreamState, Spinner, TerminalRenderer};
 use runtime::{
     check_base_commit, format_stale_base_warning, format_usd, load_oauth_credentials,
     load_system_prompt, pricing_for_model, resolve_expected_base, resolve_sandbox_status,
-    ApiClient, ApiRequest, AssistantEvent, AutonomousMode, CompactionConfig, ConfigLoader, ConfigSource,
-    ContentBlock, ConversationMessage, ConversationRuntime, McpServer, McpServerManager,
-    McpServerSpec, McpTool, MessageRole, ModelPricing, PermissionMode, PermissionPolicy,
-    ProjectContext, PromptCacheEvent, ResolvedPermissionMode, RuntimeError, Session, TokenUsage,
-    ToolError, ToolExecutor, UsageTracker,
+    ApiClient, ApiRequest, AssistantEvent, AutonomousMode, CompactionConfig, ConfigLoader,
+    ConfigSource, ContentBlock, ConversationMessage, ConversationRuntime, McpServer,
+    McpServerManager, McpServerSpec, McpTool, MessageRole, ModelPricing, PermissionMode,
+    PermissionPolicy, ProjectContext, PromptCacheEvent, ResolvedPermissionMode, RuntimeError,
+    Session, TokenUsage, ToolError, ToolExecutor, UsageTracker,
 };
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -272,7 +272,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             output_format,
             allowed_tools,
             permission_mode,
-        } => run_autonomous(task.as_str(), model, output_format, allowed_tools, permission_mode)?,
+        } => run_autonomous(
+            task.as_str(),
+            model,
+            output_format,
+            allowed_tools,
+            permission_mode,
+        )?,
     }
     Ok(())
 }
@@ -574,7 +580,8 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                 let value = args
                     .get(index + 1)
                     .ok_or_else(|| "missing value for --auto".to_string())?;
-                let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
+                let permission_mode =
+                    permission_mode_override.unwrap_or_else(default_permission_mode);
                 return Ok(CliAction::Autonomous {
                     task: value.to_string(),
                     model: resolve_model_alias_with_config(&model),
@@ -585,7 +592,8 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             }
             flag if flag.starts_with("--auto=") => {
                 let value = &flag[7..];
-                let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
+                let permission_mode =
+                    permission_mode_override.unwrap_or_else(default_permission_mode);
                 return Ok(CliAction::Autonomous {
                     task: value.to_string(),
                     model: resolve_model_alias_with_config(&model),
@@ -1659,7 +1667,9 @@ fn run_autonomous(
                 return Err(serde_json::json!({
                     "type": "error",
                     "error": e.to_string(),
-                }).to_string().into());
+                })
+                .to_string()
+                .into());
             }
             return Err(e.to_string().into());
         }
