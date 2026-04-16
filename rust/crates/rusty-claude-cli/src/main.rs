@@ -3059,7 +3059,11 @@ fn run_resume_command(
         | SlashCommand::Tag { .. }
         | SlashCommand::OutputStyle { .. }
         | SlashCommand::AddDir { .. }
-        | SlashCommand::Auto { .. } => Err("unsupported resumed slash command".into()),
+        | SlashCommand::Auto { .. }
+        | SlashCommand::Snapshot { .. }
+        | SlashCommand::Snapshots
+        | SlashCommand::Restore { .. }
+        | SlashCommand::Release { .. } => Err("unsupported resumed slash command".into()),
     }
 }
 
@@ -4121,6 +4125,15 @@ impl LiveCli {
                 eprintln!("{cmd_name} is not yet implemented in this build.");
                 false
             }
+            SlashCommand::Snapshot { name } => self.handle_snapshot(name.as_deref())?,
+            SlashCommand::Snapshots => {
+                print_snapshots()?;
+                false
+            }
+            SlashCommand::Restore { id } => self.handle_restore(id.as_deref())?,
+            SlashCommand::Release { version, notes } => {
+                self.handle_release(version.as_deref(), notes.as_deref())?
+            }
             SlashCommand::Desktop => match desktop::start_web_ui() {
                 Ok(url) => {
                     desktop::open_browser(&url);
@@ -4798,6 +4811,259 @@ fn current_session_store() -> Result<runtime::SessionStore, Box<dyn std::error::
 
 fn new_cli_session() -> Result<Session, Box<dyn std::error::Error>> {
     Ok(Session::new().with_workspace_root(env::current_dir()?))
+}
+
+fn snapshots_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let home = env::var("HOME").map_err(|e| e.to_string())?;
+    let dir = PathBuf::from(home).join(".claw").join("snapshots");
+    if !dir.exists() {
+        fs::create_dir_all(&dir)?;
+    }
+    Ok(dir)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SnapshotMetadata {
+    id: String,
+    name: Option<String>,
+    created_at_ms: u64,
+    size_bytes: u64,
+    session_id: String,
+}
+
+impl LiveCli {
+    fn handle_snapshot(&mut self, name: Option<&str>) -> Result<bool, Box<dyn std::error::Error>> {
+        let session = self.runtime.session();
+        let created_at_ms = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(self.runtime.session().updated_at_ms, |duration| {
+                u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+            });
+        let snapshot_id = format!("snapshot-{}", created_at_ms);
+        let snapshot_name = name.map(String::from);
+        let session_path = self.session.path.clone();
+        let size_bytes = fs::metadata(&session_path)?.len();
+
+        let metadata = SnapshotMetadata {
+            id: snapshot_id.clone(),
+            name: snapshot_name.clone(),
+            created_at_ms,
+            size_bytes,
+            session_id: session.session_id.clone(),
+        };
+
+        let snapshot_path = snapshots_dir()?.join(format!("{}.jsonl", snapshot_id));
+        fs::copy(&session_path, &snapshot_path)?;
+        let meta_path = snapshots_dir()?.join(format!("{}.meta.json", snapshot_id));
+        fs::write(&meta_path, serde_json::to_string_pretty(&metadata)?)?;
+
+        println!(
+            "Snapshot saved {}",
+            name.map(|n| format!("as '{}'", n)).unwrap_or_default()
+        );
+        println!("  ID             {}", snapshot_id);
+        println!("  File           {}", snapshot_path.display());
+        println!("  Size           {} bytes", size_bytes);
+        Ok(false)
+    }
+
+    fn handle_restore(&mut self, id: Option<&str>) -> Result<bool, Box<dyn std::error::Error>> {
+        let Some(id) = id else {
+            return Err("snapshot ID required: /restore <id>".into());
+        };
+        let snapshot_path = snapshots_dir()?.join(format!("{}.jsonl", id));
+        if !snapshot_path.exists() {
+            return Err(format!("snapshot not found: {}", id).into());
+        }
+        let meta_path = snapshots_dir()?.join(format!("{}.meta.json", id));
+        if !meta_path.exists() {
+            return Err(format!("snapshot metadata not found: {}", id).into());
+        }
+
+        let metadata: SnapshotMetadata = serde_json::from_str(&fs::read_to_string(&meta_path)?)?;
+        let target_path = self.session.path.clone();
+        fs::copy(&snapshot_path, &target_path)?;
+
+        println!("Session restored from snapshot {}", id);
+        println!("  Original session  {}", metadata.session_id);
+        println!("  Size           {} bytes", metadata.size_bytes);
+        Ok(true)
+    }
+
+    fn handle_release(
+        &mut self,
+        version: Option<&str>,
+        notes: Option<&str>,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let cwd = env::current_dir()?;
+        if !cwd.join(".git").exists() {
+            return Err("not a git repository".into());
+        }
+
+        let resolved_version = match version {
+            Some(v) => v.to_string(),
+            None => {
+                let output = std::process::Command::new("git")
+                    .args(["describe", "--tags", "--abbrev=0"])
+                    .current_dir(&cwd)
+                    .output()?;
+                if output.status.success() {
+                    let tag = String::from_utf8_lossy(&output.stdout)
+                        .trim()
+                        .trim_start_matches('v')
+                        .to_string();
+                    let parts: Vec<&str> = tag.split('.').collect();
+                    if parts.len() >= 2 {
+                        let major: u32 = parts[0].parse().unwrap_or(0);
+                        let minor: u32 = parts[1].parse().unwrap_or(0);
+                        let patch: u32 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+                        format!("{}.{}.{}", major, minor, patch + 1)
+                    } else {
+                        tag
+                    }
+                } else {
+                    "0.1.0".to_string()
+                }
+            }
+        };
+
+        let changelog = generate_changelog_from_git(&cwd)?;
+        let release_notes = notes.map(String::from).unwrap_or(changelog);
+
+        std::process::Command::new("git")
+            .args([
+                "tag",
+                "-a",
+                &format!("v{}", resolved_version),
+                "-m",
+                &release_notes,
+            ])
+            .current_dir(&cwd)
+            .output()?;
+
+        let gh_available = std::process::Command::new("gh")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if gh_available {
+            let output = std::process::Command::new("gh")
+                .args([
+                    "release",
+                    "create",
+                    &format!("v{}", resolved_version),
+                    "--title",
+                    &format!("v{}", resolved_version),
+                    "--notes",
+                    &release_notes,
+                ])
+                .current_dir(&cwd)
+                .output()?;
+            if !output.status.success() {
+                eprintln!("gh: {}", String::from_utf8_lossy(&output.stderr));
+            }
+        } else {
+            println!("Release created: v{}", resolved_version);
+            println!("  Tag created locally.");
+            println!("  Run `git push && git push --tags` to publish.");
+            println!("  Install gh CLI to create GitHub release automatically.");
+        }
+
+        Ok(false)
+    }
+}
+
+fn generate_changelog_from_git(cwd: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let output = std::process::Command::new("git")
+        .args([
+            "log",
+            "--pretty=format:%s",
+            &(format!("v{{}}..HEAD")),
+            "HEAD",
+        ])
+        .current_dir(cwd)
+        .output()?;
+
+    if output.status.success() {
+        let commits = String::from_utf8_lossy(&output.stdout);
+        if commits.is_empty() {
+            return Ok("No changes since last release".to_string());
+        }
+        Ok(commits
+            .lines()
+            .map(|l| format!("- {}", l))
+            .collect::<Vec<_>>()
+            .join("\n"))
+    } else {
+        Ok("Changes since last release".to_string())
+    }
+}
+
+fn print_snapshots() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = snapshots_dir()?;
+    if !dir.exists() {
+        println!("No snapshots saved yet.");
+        return Ok(());
+    }
+
+    let mut snapshots = Vec::new();
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if let Some(name) = path.file_name() {
+            let name = name.to_string_lossy();
+            if name.ends_with(".meta.json") {
+                let meta: SnapshotMetadata = serde_json::from_str(&fs::read_to_string(&path)?)?;
+                snapshots.push(meta);
+            }
+        }
+    }
+
+    snapshots.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms));
+
+    if snapshots.is_empty() {
+        println!("No snapshots found.");
+        return Ok(());
+    }
+
+    println!("Snapshots");
+    println!("  Directory       {}", dir.display());
+    for snap in &snapshots {
+        let datetime = std::time::SystemTime::UNIX_EPOCH
+            .checked_add(std::time::Duration::from_millis(snap.created_at_ms))
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| {
+                let secs = d.as_secs();
+                let days = secs / 86400;
+                let years = days / 365 + 1970;
+                let remaining_days = days % 365;
+                let months = remaining_days / 30;
+                let day = remaining_days % 30;
+                format!("{:04}-{:02}-{:02}", years, months + 1, day + 1)
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+        println!(
+            "  {} {} {} {}",
+            snap.id,
+            snap.name.as_deref().unwrap_or("-"),
+            datetime,
+            format_size(snap.size_bytes)
+        );
+    }
+    Ok(())
+}
+
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    if bytes >= MB {
+        format!("{:.1}MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1}KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{}B", bytes)
+    }
 }
 
 fn create_managed_session_handle(

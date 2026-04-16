@@ -1882,8 +1882,8 @@ mod tests {
             .as_str()
             .expect("arguments must be a string");
 
-        let reparsed: serde_json::Value = serde_json::from_str(arguments_str)
-            .expect("arguments must be valid JSON");
+        let reparsed: serde_json::Value =
+            serde_json::from_str(arguments_str).expect("arguments must be valid JSON");
         assert_eq!(
             reparsed["content"].as_str().unwrap(),
             "line1\nline2",

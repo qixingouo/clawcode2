@@ -1041,6 +1041,34 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
         argument_hint: Some("[<task-description>]"),
         resume_supported: false,
     },
+    SlashCommandSpec {
+        name: "snapshot",
+        aliases: &[],
+        summary: "Save current session state to a snapshot",
+        argument_hint: Some("[name]"),
+        resume_supported: false,
+    },
+    SlashCommandSpec {
+        name: "snapshots",
+        aliases: &[],
+        summary: "List all saved session snapshots",
+        argument_hint: None,
+        resume_supported: true,
+    },
+    SlashCommandSpec {
+        name: "restore",
+        aliases: &[],
+        summary: "Restore session from a snapshot",
+        argument_hint: Some("<id>"),
+        resume_supported: false,
+    },
+    SlashCommandSpec {
+        name: "release",
+        aliases: &[],
+        summary: "Create a git tag and GitHub release",
+        argument_hint: Some("[version] [notes]"),
+        resume_supported: false,
+    },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1189,6 +1217,17 @@ pub enum SlashCommand {
     Auto {
         task: Option<String>,
     },
+    Snapshot {
+        name: Option<String>,
+    },
+    Snapshots,
+    Restore {
+        id: Option<String>,
+    },
+    Release {
+        version: Option<String>,
+        notes: Option<String>,
+    },
     Unknown(String),
 }
 
@@ -1291,6 +1330,10 @@ impl SlashCommand {
             Self::Mcp { .. } => "/mcp",
             Self::Export { .. } => "/export",
             Self::Auto { .. } => "/auto",
+            Self::Snapshot { .. } => "/snapshot",
+            Self::Snapshots => "/snapshots",
+            Self::Restore { .. } => "/restore",
+            Self::Release { .. } => "/release",
             #[allow(unreachable_patterns)]
             _ => "/unknown",
         }
@@ -1503,6 +1546,13 @@ pub fn validate_slash_command_input(
             count: optional_single_arg(command, &args, "[count]")?,
         },
         "auto" => SlashCommand::Auto { task: remainder },
+        "snapshot" => SlashCommand::Snapshot { name: remainder },
+        "snapshots" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Snapshots
+        }
+        "restore" => SlashCommand::Restore { id: remainder },
+        "release" => parse_release_command(&args)?,
         other => SlashCommand::Unknown(other.to_string()),
     }))
 }
@@ -1573,6 +1623,23 @@ fn parse_clear_args(args: &[&str]) -> Result<bool, SlashCommandParseError> {
             "/clear [--confirm]",
         )),
         _ => Err(usage_error("clear", "[--confirm]")),
+    }
+}
+
+fn parse_release_command(args: &[&str]) -> Result<SlashCommand, SlashCommandParseError> {
+    match args {
+        [] => Ok(SlashCommand::Release {
+            version: None,
+            notes: None,
+        }),
+        [version] => Ok(SlashCommand::Release {
+            version: Some(version.to_string()),
+            notes: None,
+        }),
+        [version, notes @ ..] => Ok(SlashCommand::Release {
+            version: Some(version.to_string()),
+            notes: Some(notes.join(" ")),
+        }),
     }
 }
 
@@ -4123,6 +4190,10 @@ pub fn handle_slash_command(
         | SlashCommand::AddDir { .. }
         | SlashCommand::History { .. }
         | SlashCommand::Auto { .. }
+        | SlashCommand::Snapshot { .. }
+        | SlashCommand::Snapshots
+        | SlashCommand::Restore { .. }
+        | SlashCommand::Release { .. }
         | SlashCommand::Unknown(_) => None,
     }
 }
@@ -4660,7 +4731,7 @@ mod tests {
         assert!(help.contains("aliases: /skill"));
         assert!(!help.contains("/login"));
         assert!(!help.contains("/logout"));
-        assert_eq!(slash_command_specs().len(), 140);
+        assert_eq!(slash_command_specs().len(), 144);
         assert!(resume_supported_slash_commands().len() >= 39);
     }
 
