@@ -1850,6 +1850,48 @@ mod tests {
         assert_eq!(tool_calls.as_array().unwrap().len(), 1);
     }
 
+    /// Regression: tool_call arguments containing escaped newlines must not be
+    /// double-escaped in the serialized JSON. Bug: when MiniMax returned
+    /// tool_call with content containing `\n`, the `input.to_string()` inside
+    /// `json!` caused double-escaping, producing `\\n` instead of `\n`.
+    #[test]
+    fn tool_call_arguments_with_newlines_are_not_double_escaped() {
+        use crate::types::{InputContentBlock, InputMessage};
+
+        let request = MessageRequest {
+            model: "minimax/abab6.5s".to_string(),
+            max_tokens: 100,
+            messages: vec![InputMessage {
+                role: "assistant".to_string(),
+                content: vec![InputContentBlock::ToolUse {
+                    id: "call_1".to_string(),
+                    name: "write_file".to_string(),
+                    input: serde_json::json!({"content": "line1\nline2", "path": "test.txt"}),
+                }],
+            }],
+            stream: false,
+            ..Default::default()
+        };
+        let payload = build_chat_completion_request(&request, OpenAiCompatConfig::minimax());
+        let messages = payload["messages"].as_array().unwrap();
+        let assistant_msg = messages
+            .iter()
+            .find(|m| m["role"] == "assistant")
+            .expect("assistant message must be present");
+        let arguments_str = assistant_msg["tool_calls"][0]["function"]["arguments"]
+            .as_str()
+            .expect("arguments must be a string");
+
+        let reparsed: serde_json::Value = serde_json::from_str(arguments_str)
+            .expect("arguments must be valid JSON");
+        assert_eq!(
+            reparsed["content"].as_str().unwrap(),
+            "line1\nline2",
+            "newline must be a single escaped character, not double-escaped"
+        );
+        assert_eq!(reparsed["path"].as_str().unwrap(), "test.txt");
+    }
+
     /// Orphaned tool messages (no preceding assistant `tool_calls`) must be
     /// dropped by the request-builder sanitizer. Regression for the second
     /// layer of the tool-pairing invariant fix (gaebal-gajae 2026-04-10).

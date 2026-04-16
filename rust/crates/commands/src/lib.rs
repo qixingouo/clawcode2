@@ -1034,6 +1034,13 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
         argument_hint: None,
         resume_supported: true,
     },
+    SlashCommandSpec {
+        name: "auto",
+        aliases: &[],
+        summary: "Run autonomous mode to complete a task with self-correction",
+        argument_hint: Some("[<task-description>]"),
+        resume_supported: false,
+    },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1179,6 +1186,9 @@ pub enum SlashCommand {
     History {
         count: Option<String>,
     },
+    Auto {
+        task: Option<String>,
+    },
     Unknown(String),
 }
 
@@ -1280,6 +1290,7 @@ impl SlashCommand {
             Self::Sandbox => "/sandbox",
             Self::Mcp { .. } => "/mcp",
             Self::Export { .. } => "/export",
+            Self::Auto { .. } => "/auto",
             #[allow(unreachable_patterns)]
             _ => "/unknown",
         }
@@ -1491,6 +1502,7 @@ pub fn validate_slash_command_input(
         "history" => SlashCommand::History {
             count: optional_single_arg(command, &args, "[count]")?,
         },
+        "auto" => SlashCommand::Auto { task: remainder },
         other => SlashCommand::Unknown(other.to_string()),
     }))
 }
@@ -4110,6 +4122,7 @@ pub fn handle_slash_command(
         | SlashCommand::OutputStyle { .. }
         | SlashCommand::AddDir { .. }
         | SlashCommand::History { .. }
+        | SlashCommand::Auto { .. }
         | SlashCommand::Unknown(_) => None,
     }
 }

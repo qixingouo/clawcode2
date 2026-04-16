@@ -44,7 +44,7 @@ use render::{MarkdownStreamState, Spinner, TerminalRenderer};
 use runtime::{
     check_base_commit, format_stale_base_warning, format_usd, load_oauth_credentials,
     load_system_prompt, pricing_for_model, resolve_expected_base, resolve_sandbox_status,
-    ApiClient, ApiRequest, AssistantEvent, CompactionConfig, ConfigLoader, ConfigSource,
+    ApiClient, ApiRequest, AssistantEvent, AutonomousMode, CompactionConfig, ConfigLoader, ConfigSource,
     ContentBlock, ConversationMessage, ConversationRuntime, McpServer, McpServerManager,
     McpServerSpec, McpTool, MessageRole, ModelPricing, PermissionMode, PermissionPolicy,
     ProjectContext, PromptCacheEvent, ResolvedPermissionMode, RuntimeError, Session, TokenUsage,
@@ -91,6 +91,7 @@ const CLI_OPTION_SUGGESTIONS: &[&str] = &[
     "--print",
     "--compact",
     "--base-commit",
+    "--auto",
     "-p",
 ];
 
@@ -265,6 +266,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         )?,
         CliAction::HelpTopic(topic) => print_help_topic(topic),
         CliAction::Help { output_format } => print_help(output_format)?,
+        CliAction::Autonomous {
+            task,
+            model,
+            output_format,
+            allowed_tools,
+            permission_mode,
+        } => run_autonomous(task.as_str(), model, output_format, allowed_tools, permission_mode)?,
     }
     Ok(())
 }
@@ -353,6 +361,13 @@ enum CliAction {
     // prompt-mode formatting is only supported for non-interactive runs
     Help {
         output_format: CliOutputFormat,
+    },
+    Autonomous {
+        task: String,
+        model: String,
+        output_format: CliOutputFormat,
+        allowed_tools: Option<AllowedToolSet>,
+        permission_mode: PermissionMode,
     },
 }
 
@@ -554,6 +569,30 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
             flag if flag.starts_with("--allowed-tools=") => {
                 allowed_tool_values.push(flag[16..].to_string());
                 index += 1;
+            }
+            "--auto" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --auto".to_string())?;
+                let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
+                return Ok(CliAction::Autonomous {
+                    task: value.to_string(),
+                    model: resolve_model_alias_with_config(&model),
+                    output_format,
+                    allowed_tools: normalize_allowed_tools(&allowed_tool_values)?,
+                    permission_mode,
+                });
+            }
+            flag if flag.starts_with("--auto=") => {
+                let value = &flag[7..];
+                let permission_mode = permission_mode_override.unwrap_or_else(default_permission_mode);
+                return Ok(CliAction::Autonomous {
+                    task: value.to_string(),
+                    model: resolve_model_alias_with_config(&model),
+                    output_format,
+                    allowed_tools: normalize_allowed_tools(&allowed_tool_values)?,
+                    permission_mode,
+                });
             }
             other if rest.is_empty() && other.starts_with('-') => {
                 return Err(format_unknown_option(other))
@@ -1559,6 +1598,69 @@ fn run_mcp_serve() -> Result<(), Box<dyn std::error::Error>> {
         let mut server = McpServer::new(spec);
         server.run().await
     })?;
+    Ok(())
+}
+
+fn run_autonomous(
+    task: &str,
+    model: String,
+    output_format: CliOutputFormat,
+    allowed_tools: Option<AllowedToolSet>,
+    permission_mode: PermissionMode,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let config = AutonomousMode::load_config();
+    let mut mode = AutonomousMode::new(config);
+
+    if output_format == CliOutputFormat::Text {
+        println!("Starting autonomous mode...");
+        println!("Task: {}", task);
+        println!("Max steps: {}", mode.progress());
+    }
+
+    let result = mode.run_autonomous_loop(task.to_string(), |step_prompt| {
+        let mut cli = LiveCli::new(model.clone(), true, allowed_tools.clone(), permission_mode)
+            .map_err(|e| runtime::StepError::fatal(e.to_string()))?;
+        cli.run_turn_with_output(&step_prompt, output_format, false)
+            .map_err(|e| runtime::StepError::fatal(e.to_string()))?;
+        Ok(runtime::StepResult {
+            success: true,
+            output: "Step completed".to_string(),
+            error: None,
+        })
+    });
+
+    match result {
+        Ok(res) => {
+            if output_format == CliOutputFormat::Text {
+                println!("\nAutonomous mode complete:");
+                println!("  Steps executed: {}", res.steps_executed);
+                println!("  Corrections made: {}", res.corrections_made);
+                println!("  Goal achieved: {}", res.goal_achieved);
+            } else {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "kind": "autonomous",
+                        "success": res.success,
+                        "steps_executed": res.steps_executed,
+                        "corrections_made": res.corrections_made,
+                        "goal_achieved": res.goal_achieved,
+                        "final_score": res.final_evaluation.score,
+                    }))?
+                );
+            }
+        }
+        Err(e) => {
+            if output_format == CliOutputFormat::Json {
+                return Err(serde_json::json!({
+                    "type": "error",
+                    "error": e.to_string(),
+                }).to_string().into());
+            }
+            return Err(e.to_string().into());
+        }
+    }
+
     Ok(())
 }
 
@@ -2942,7 +3044,8 @@ fn run_resume_command(
         | SlashCommand::Ide { .. }
         | SlashCommand::Tag { .. }
         | SlashCommand::OutputStyle { .. }
-        | SlashCommand::AddDir { .. } => Err("unsupported resumed slash command".into()),
+        | SlashCommand::AddDir { .. }
+        | SlashCommand::Auto { .. } => Err("unsupported resumed slash command".into()),
     }
 }
 
@@ -3998,7 +4101,8 @@ impl LiveCli {
             | SlashCommand::Ide { .. }
             | SlashCommand::Tag { .. }
             | SlashCommand::OutputStyle { .. }
-            | SlashCommand::AddDir { .. } => {
+            | SlashCommand::AddDir { .. }
+            | SlashCommand::Auto { .. } => {
                 let cmd_name = command.slash_name();
                 eprintln!("{cmd_name} is not yet implemented in this build.");
                 false
