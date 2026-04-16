@@ -999,7 +999,7 @@ fn translate_message(message: &InputMessage) -> Vec<Value> {
                         "type": "function",
                         "function": {
                             "name": name,
-                            "arguments": input.to_string(),
+                            "arguments": serde_json::to_string(&input).unwrap(),
                         }
                     })),
                     InputContentBlock::ToolResult { .. } => {}
