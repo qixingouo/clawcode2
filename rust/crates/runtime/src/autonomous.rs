@@ -372,37 +372,41 @@ impl AutonomousMode {
         F: FnMut(String) -> Result<StepResult, StepError>,
     {
         self.init_goal(initial_goal.clone());
-        let sub_tasks = self.decompose_task(&initial_goal);
 
-        for task in &sub_tasks {
+        // For autonomous mode, we send the full original goal to the model.
+        // The model has tool access and can execute multiple steps within one turn.
+        // We do multiple iterations up to max_steps, giving the model chances
+        // to correct itself and complete the task.
+        for _ in 0..self.config.auto.max_steps {
             if self.should_stop() {
                 break;
             }
 
-            let _sub_task_id = self
-                .goal_tracker
-                .as_ref()
-                .and_then(|g| g.sub_tasks.iter().find(|t| &t.description == task))
-                .map(|t| t.id);
+            let step_result = execute_step(initial_goal.clone());
 
-            let result = self.execute_sub_task(task.clone(), &mut execute_step);
-
-            match result {
-                Ok(step_result) => {
-                    if !step_result.success {
-                        self.handle_task_failure(task, step_result.error.as_deref());
+            match step_result {
+                Ok(result) => {
+                    if result.success {
+                        self.record_step();
+                        // If the step succeeded, check if goal is achieved
+                        // For now, assume success means task is done
+                        break;
+                    } else {
+                        self.handle_task_failure("execution", result.error.as_deref());
                     }
                 }
-            Err(e) => {
-                self.handle_task_failure(task, Some(&e.to_string()));
-                if !e.recoverable {
-                    return Err(AutonomousError {
-                        message: e.message,
-                        fatal: true,
-                    });
+                Err(e) => {
+                    self.handle_task_failure("execution", Some(&e.message));
+                    if !e.recoverable {
+                        return Err(AutonomousError {
+                            message: e.message,
+                            fatal: true,
+                        });
+                    }
                 }
             }
-            }
+
+            self.record_step();
         }
 
         Ok(AutonomousResult {
@@ -422,7 +426,7 @@ impl AutonomousMode {
     where
         F: FnMut(String) -> Result<StepResult, StepError>,
     {
-        let step_prompt = format!("Execute: {}", task);
+        let step_prompt = task.clone();
 
         let result = execute_step(step_prompt)?;
 

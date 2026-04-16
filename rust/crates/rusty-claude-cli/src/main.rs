@@ -1617,9 +1617,13 @@ fn run_autonomous(
         println!("Max steps: {}", mode.progress());
     }
 
+    // Create ONE LiveCli and reuse it for all steps to maintain conversation context
+    let cli = LiveCli::new(model.clone(), true, allowed_tools.clone(), permission_mode)
+        .map_err(|e| runtime::StepError::fatal(e.to_string()))?;
+    let cli_ref = std::rc::Rc::new(std::cell::RefCell::new(cli));
+
     let result = mode.run_autonomous_loop(task.to_string(), |step_prompt| {
-        let mut cli = LiveCli::new(model.clone(), true, allowed_tools.clone(), permission_mode)
-            .map_err(|e| runtime::StepError::fatal(e.to_string()))?;
+        let mut cli = cli_ref.borrow_mut();
         cli.run_turn_with_output(&step_prompt, output_format, false)
             .map_err(|e| runtime::StepError::fatal(e.to_string()))?;
         Ok(runtime::StepResult {
