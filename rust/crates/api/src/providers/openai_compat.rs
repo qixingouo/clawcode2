@@ -524,6 +524,8 @@ struct StreamState {
     message_started: bool,
     text_started: bool,
     text_finished: bool,
+    thinking_started: bool,
+    thinking_index: u32,
     finished: bool,
     stop_reason: Option<String>,
     usage: Option<Usage>,
@@ -537,6 +539,8 @@ impl StreamState {
             message_started: false,
             text_started: false,
             text_finished: false,
+            thinking_started: false,
+            thinking_index: 1,
             finished: false,
             stop_reason: None,
             usage: None,
@@ -594,6 +598,24 @@ impl StreamState {
                 }));
             }
 
+            // Handle DeepSeek-V4 thinking/reasoning content block
+            if let Some(thinking) = choice.delta.thinking.filter(|v| !v.is_empty()) {
+                if !self.thinking_started {
+                    self.thinking_started = true;
+                    events.push(StreamEvent::ContentBlockStart(ContentBlockStartEvent {
+                        index: self.thinking_index,
+                        content_block: OutputContentBlock::Thinking {
+                            thinking: String::new(),
+                            signature: None,
+                        },
+                    }));
+                }
+                events.push(StreamEvent::ContentBlockDelta(ContentBlockDeltaEvent {
+                    index: self.thinking_index,
+                    delta: ContentBlockDelta::ThinkingDelta { thinking },
+                }));
+            }
+
             for tool_call in choice.delta.tool_calls {
                 let state = self.tool_calls.entry(tool_call.index).or_default();
                 state.apply(tool_call);
@@ -646,6 +668,12 @@ impl StreamState {
             self.text_finished = true;
             events.push(StreamEvent::ContentBlockStop(ContentBlockStopEvent {
                 index: 0,
+            }));
+        }
+
+        if self.thinking_started {
+            events.push(StreamEvent::ContentBlockStop(ContentBlockStopEvent {
+                index: self.thinking_index,
             }));
         }
 
@@ -822,6 +850,9 @@ struct ChunkDelta {
     content: Option<String>,
     #[serde(default, deserialize_with = "deserialize_null_as_empty_vec")]
     tool_calls: Vec<DeltaToolCall>,
+    /// DeepSeek-V4 thinking content (reasoning/thinking chain).
+    #[serde(default)]
+    thinking: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -870,6 +901,8 @@ fn is_reasoning_model(model: &str) -> bool {
         // Alibaba DashScope reasoning variants (QwQ + Qwen3-Thinking family)
         || canonical.starts_with("qwen-qwq")
         || canonical.starts_with("qwq")
+        // DeepSeek-V4 family (always in thinking mode)
+        || canonical.starts_with("deepseek-v4")
         || canonical.contains("thinking")
 }
 
@@ -913,7 +946,7 @@ fn build_chat_completion_request(request: &MessageRequest, config: OpenAiCompatC
         }));
     }
     for message in &request.messages {
-        messages.extend(translate_message(message));
+        messages.extend(translate_message(message, message.reasoning_content.as_deref()));
     }
     // Sanitize: drop any `role:"tool"` message that does not have a valid
     // paired `role:"assistant"` with a `tool_calls` entry carrying the same
@@ -986,7 +1019,7 @@ fn build_chat_completion_request(request: &MessageRequest, config: OpenAiCompatC
     payload
 }
 
-fn translate_message(message: &InputMessage) -> Vec<Value> {
+fn translate_message(message: &InputMessage, reasoning_content: Option<&str>) -> Vec<Value> {
     match message.role.as_str() {
         "assistant" => {
             let mut text = String::new();
@@ -1005,7 +1038,7 @@ fn translate_message(message: &InputMessage) -> Vec<Value> {
                     InputContentBlock::ToolResult { .. } => {}
                 }
             }
-            if text.is_empty() && tool_calls.is_empty() {
+            if text.is_empty() && tool_calls.is_empty() && reasoning_content.is_none() {
                 Vec::new()
             } else {
                 let mut msg = serde_json::json!({
@@ -1016,6 +1049,10 @@ fn translate_message(message: &InputMessage) -> Vec<Value> {
                 // assistant messages with an explicit empty tool_calls array.
                 if !tool_calls.is_empty() {
                     msg["tool_calls"] = json!(tool_calls);
+                }
+                // reasoning_content for DeepSeek-V4 and similar thinking models
+                if let Some(rc) = reasoning_content {
+                    msg["reasoning_content"] = json!(rc);
                 }
                 vec![msg]
             }
