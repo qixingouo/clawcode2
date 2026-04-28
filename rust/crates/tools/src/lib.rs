@@ -4774,6 +4774,7 @@ fn convert_messages(messages: &[ConversationMessage]) -> Vec<InputMessage> {
             (!content.is_empty()).then(|| InputMessage {
                 role: role.to_string(),
                 content,
+                reasoning_content: None,
             })
         })
         .collect()

@@ -818,6 +818,7 @@ mod tests {
                 content: vec![InputContentBlock::Text {
                     text: "x".repeat(600_000),
                 }],
+                reasoning_content: None,
             }],
             system: Some("Keep the answer short.".to_string()),
             tools: Some(vec![ToolDefinition {
@@ -864,6 +865,7 @@ mod tests {
                 content: vec![InputContentBlock::Text {
                     text: "x".repeat(600_000),
                 }],
+                reasoning_content: None,
             }],
             system: None,
             tools: None,

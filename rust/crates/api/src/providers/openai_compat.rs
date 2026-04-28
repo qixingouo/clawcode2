@@ -1474,6 +1474,7 @@ mod tests {
                             is_error: false,
                         },
                     ],
+                    reasoning_content: None,
                 }],
                 system: Some("be helpful".to_string()),
                 tools: Some(vec![ToolDefinition {
@@ -1838,6 +1839,7 @@ mod tests {
                 content: vec![InputContentBlock::Text {
                     text: "Hello".to_string(),
                 }],
+                reasoning_content: None,
             }],
             stream: false,
             ..Default::default()
@@ -1870,6 +1872,7 @@ mod tests {
                     name: "read_file".to_string(),
                     input: serde_json::json!({"path": "/tmp/test"}),
                 }],
+                reasoning_content: None,
             }],
             stream: false,
             ..Default::default()
@@ -1905,6 +1908,7 @@ mod tests {
                     name: "write_file".to_string(),
                     input: serde_json::json!({"content": "line1\nline2", "path": "test.txt"}),
                 }],
+                reasoning_content: None,
             }],
             stream: false,
             ..Default::default()

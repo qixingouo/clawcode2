@@ -1,0 +1,2 @@
+{"created_at_ms":1776301799614,"model":"deepseek/deepseek-reasoner","session_id":"session-1776301799615-0","type":"session_meta","updated_at_ms":1776301799614,"version":1,"workspace_root":"/home/qixin/.openclaw/workspace-bot1-agent/claw-code/rust"}
+{"message":{"blocks":[{"text":"say hello","type":"text"}],"role":"user"},"type":"message"}
